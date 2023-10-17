@@ -14,7 +14,7 @@ class MyApp extends StatelessWidget {
       initialRoute: "/",
       routes: {
         "/": (context) => const QuestionPage(),
-        "/answer": (context) => AnwserPage(
+        "/answer": (context) => AnswerPage(
             answer: ModalRoute.of(context)!.settings.arguments.toString()),
       },
     );

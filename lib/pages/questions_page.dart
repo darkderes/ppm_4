@@ -5,7 +5,7 @@ import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'dart:math';
 import 'dart:async';
-import 'package:animated_background/animated_background.dart';
+import '../data/respuestas.dart';
 
 class QuestionPage extends StatefulWidget {
   const QuestionPage({super.key});
@@ -17,14 +17,12 @@ class QuestionPage extends StatefulWidget {
 
 class _QuestionPageState extends State<QuestionPage>
     with TickerProviderStateMixin {
-  String respuesta = '';
-  final TextEditingController _preguntaController = TextEditingController();
   AudioPlayer audioPlayer = AudioPlayer();
   double positionY = 0;
   double screenHeight = 0;
   double screenWidth = 0;
   double ballSize = 250; // Tamaño de la bola
-  SpeechToText _speechToText = SpeechToText();
+  final SpeechToText _speechToText = SpeechToText();
   bool _speechEnabled = false;
   String _lastWords = '';
   late Timer _timer;
@@ -33,57 +31,49 @@ class _QuestionPageState extends State<QuestionPage>
 
 // Posición Y de la imagen
 
-  final List<String> respuestas = [
-    'Sí',
-    'No',
-    'Tal vez',
-    'Definitivamente',
-    'No lo sé',
-    'Pregunta de nuevo más tarde',
-  ];
-  late AnimationController _rotationController;
   @override
   void initState() {
     super.initState();
-    // AudioPlayer audioPlayer = AudioPlayer();
-    // audioPlayer.setReleaseMode(ReleaseMode.loop);
-    // audioPlayer.play(AssetSource('audios/fondo.mp3'));
-    // baja el volumen
-    audioPlayer.setVolume(0.1);
+    AudioPlayer audioPlayer = AudioPlayer();
+    audioPlayer.setReleaseMode(ReleaseMode.release);
+
     accelerometerEvents.listen((event) {
       setState(() {
         if (!ballStopped) {
-          positionY += event.x * 100; // Ajusta la velocidad de movimiento aquí
+          positionY += event.y * 100; // Ajusta la velocidad de movimiento aquí
           positionY = positionY.clamp(
               0,
               screenHeight / 2 -
                   ballSize); // Limita la posición en la mitad superior de la pantalla
-          if ((positionY == 0) && (ballTopCount < 100)) {
+          if ((positionY == 0) && (ballTopCount >= 0 && ballTopCount <= 100)) {
             // Verifica si la bola está en la parte superior de la pantalla
             ballTopCount++;
+            audioPlayer.play(AssetSource('audios/touch.mp3'));
 
-            if (ballTopCount == 100) {
+            if ((_lastWords.isNotEmpty) && (ballTopCount > 6)) {
               try {
                 accelerometerEvents.drain();
-                obtenerRespuesta();
-                Navigator.pushNamed(context, '/answer', arguments: respuesta);
+                Navigator.pushNamed(context, '/answer',
+                        arguments: obtenerRespuesta())
+                    .then((value) => {
+                          ballTopCount = 0,
+                        });
                 _lastWords = '';
+                ballTopCount = 0;
+                audioPlayer.stop();
               } catch (e, stackTrace) {
                 print("Error: $e");
                 print("Stack Trace: $stackTrace");
               }
             } // Incrementa el contador
+          } else {
+            // ballTopCount = 0;
           }
 
           _restartTimer();
         } // Reinicia el temporizador
       });
     });
-    AnimatedBackground(
-      behaviour: RandomParticleBehaviour(),
-      vsync: this,
-      child: Text('Hello'),
-    );
     _initSpeech();
     _startTimer();
   }
@@ -104,10 +94,10 @@ class _QuestionPageState extends State<QuestionPage>
 
   // Función para iniciar el temporizador
   void _startTimer() {
-    _timer = Timer(Duration(seconds: 3), () {
+    _timer = Timer(const Duration(seconds: 3), () {
       // Después de 3 segundos sin movimiento, posiciona la bola en la mitad superior de la pantalla
       setState(() {
-        positionY = 0;
+        //  positionY = 0;
       });
     });
   }
@@ -125,7 +115,7 @@ class _QuestionPageState extends State<QuestionPage>
   void _stopListening() async {
     await _speechToText.stop();
     setState(() {
-      //  ballStopped = true;
+      ballStopped = true;
     });
   }
 
@@ -144,14 +134,12 @@ class _QuestionPageState extends State<QuestionPage>
     super.dispose();
   }
 
-  void obtenerRespuesta() {
-    setState(() {
-      if (_lastWords.isNotEmpty) {
-        respuesta = respuestas[Random().nextInt(respuestas.length)];
-      } else {
-        respuesta = '';
-      }
-    });
+  String obtenerRespuesta() {
+    if (_lastWords.isNotEmpty) {
+      return respuestas[Random().nextInt(respuestas.length)];
+    } else {
+      return '';
+    }
   }
 
   @override
@@ -159,46 +147,26 @@ class _QuestionPageState extends State<QuestionPage>
     screenHeight = MediaQuery.of(context).size.height;
     screenWidth = MediaQuery.of(context).size.width;
     return Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Container(
-              height: screenHeight / 2,
-              child: Stack(
-                children: <Widget>[
-                  Positioned(
-                    top: positionY,
-                    left: screenWidth / 2 - ballSize / 2,
-                    child: Image.asset('assets/images/bola.png',
-                        width: ballSize, height: ballSize),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  Text(
-                    // If listening is active show the recognized words
-                    _speechToText.isListening
-                        ? 'Hablando...'
-                        : _speechEnabled
-                            ? 'Tap el botón para empezar a hablar'
-                            : 'Función de reconocimiento de voz no disponible',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                      // If listening is active show the recognized words
-                      '$_lastWords'),
-                ],
-              ),
-            ),
-          ],
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment.center,
+            radius: 5.5,
+            colors: [
+              Color(0xFF167016), // Color verde brillante
+              Colors.white, // Color blanco
+            ],
+          ),
+        ),
+        child: Center(
+          child: CuerpoQuestion(
+              screenHeight: screenHeight,
+              positionY: positionY,
+              screenWidth: screenWidth,
+              ballSize: ballSize,
+              speechToText: _speechToText,
+              speechEnabled: _speechEnabled,
+              lastWords: _lastWords),
         ),
       ),
       floatingActionButton: FloatingActionButton(
@@ -207,8 +175,89 @@ class _QuestionPageState extends State<QuestionPage>
             // If not yet listening for speech start, otherwise stop
             _speechToText.isNotListening ? _startListening : _stopListening,
         tooltip: 'Listen',
-        child: Icon(_speechToText.isNotListening ? Icons.mic_off : Icons.mic),
+        backgroundColor: const Color.fromARGB(255, 248, 247, 247),
+        child: Icon(
+          _speechToText.isNotListening ? Icons.mic_off : Icons.mic,
+          color: Colors.green,
+        ),
       ),
+    );
+  }
+}
+
+class CuerpoQuestion extends StatelessWidget {
+  const CuerpoQuestion({
+    super.key,
+    required this.screenHeight,
+    required this.positionY,
+    required this.screenWidth,
+    required this.ballSize,
+    required SpeechToText speechToText,
+    required bool speechEnabled,
+    required String lastWords,
+  })  : _speechToText = speechToText,
+        _speechEnabled = speechEnabled,
+        _lastWords = lastWords;
+
+  final double screenHeight;
+  final double positionY;
+  final double screenWidth;
+  final double ballSize;
+  final SpeechToText _speechToText;
+  final bool _speechEnabled;
+  final String _lastWords;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: <Widget>[
+        SizedBox(
+          height: screenHeight / 2,
+          child: Stack(
+            children: <Widget>[
+              Positioned(
+                top: positionY,
+                left: screenWidth / 2 - ballSize / 2,
+                child: Image.asset('assets/images/bola.png',
+                    width: ballSize, height: ballSize),
+              ),
+            ],
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                // If listening is active show the recognized words
+                _speechToText.isListening
+                    ? 'Hablando...'
+                    : _speechEnabled
+                        ? _lastWords.isNotEmpty
+                            ? 'agite el telefono'
+                            : 'Presione el botón microfono para hacer una pregunta'
+                        : 'El reconocimiento de voz no está disponible',
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                // If listening is active show the recognized words
+                _lastWords,
+                style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
